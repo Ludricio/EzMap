@@ -95,6 +95,12 @@ namespace EzMap.Generators.Diagnostics
             "Multiple DefaultConverterSettings found",
             "Multiple classes with DefaultConverterSettingsAttribute instances found in assembly. Only one is allowed per assembly."
         );
+        
+        public static DiagnosticDescriptor RequiredPropertyNotMapped { get; } = Create(
+            "EMG108",
+            "Required property not mapped",
+            "The required property {0} on class {1} is not mapped. Ensure all required properties are mapped."
+        );
 
         private static DiagnosticDescriptor Create(
             string id,

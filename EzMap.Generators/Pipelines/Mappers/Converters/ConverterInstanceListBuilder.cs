@@ -1,4 +1,5 @@
 ﻿using EzMap.Generators.Pipelines.Mappers.Models.Mappings;
+using EzMap.Generators.Utils.Extensions;
 using Microsoft.CodeAnalysis;
 
 namespace EzMap.Generators.Pipelines.Mappers.Converters
@@ -14,8 +15,7 @@ namespace EzMap.Generators.Pipelines.Mappers.Converters
             foreach (var mapping in propertyMappings.OfType<ConverterMappedProperty>())
             {
                 var instanceName = mapping.ConverterInstanceName;
-                if (!converterInstances.ContainsKey(instanceName))
-                    converterInstances.Add(instanceName, mapping.TypeConverterSymbol);
+                converterInstances.TryAdd(instanceName, mapping.TypeConverterSymbol);
             }
 
             return converterInstances;

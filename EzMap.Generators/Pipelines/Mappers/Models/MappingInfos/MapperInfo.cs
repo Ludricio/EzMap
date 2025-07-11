@@ -4,6 +4,7 @@ namespace EzMap.Generators.Pipelines.Mappers.Models.MappingInfos;
 
 internal class MapperInfo
 {
+    public required AttributeData AttributeData { get; set; }
     public required ISymbol ClassSymbol { get; set; }
     public required ITypeSymbol DomainTypeSymbol { get; set; }
     public required ITypeSymbol DtoTypeSymbol { get; set; }

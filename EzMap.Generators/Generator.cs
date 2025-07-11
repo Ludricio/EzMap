@@ -20,7 +20,6 @@ public class MapperGenerator : IIncrementalGenerator
                 "EzMap.MapClassAttribute",
                 predicate: mapperPipeline.Filter,
                 transform: mapperPipeline.Transform)
-            .Where(static m => m is not null)
             .WithTrackingName("MapperPipelineNonGeneric")
             .Collect();
 
@@ -28,7 +27,6 @@ public class MapperGenerator : IIncrementalGenerator
                 "EzMap.MapClassAttribute`2",
                 predicate: mapperPipeline.Filter,
                 transform: mapperPipeline.Transform)
-            .Where(static m => m is not null)
             .WithTrackingName("MapperPipelineGeneric")
             .Collect();
 
@@ -80,7 +78,7 @@ public class MapperGenerator : IIncrementalGenerator
             DefaultSettingsPipelineProcessor defaultSettingsOutputProcessor = new(spc, compilation);
             DefaultSettingsPipelineData defaultSettings =
                 defaultSettingsOutputProcessor.Process(provider.DefaultSettingsPipelineOutput);
-
+            
             MapperPipelineOutputProcessor mapperOutputProcessor = new(spc, defaultSettings, compilation);
             mapperOutputProcessor.Process(provider.MapperPipelineOutput);
         });

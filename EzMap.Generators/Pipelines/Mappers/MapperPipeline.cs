@@ -41,7 +41,7 @@ namespace EzMap.Generators.Pipelines.Mappers
                 );
                 return data;
             }
-
+            
             ct.ThrowIfCancellationRequested();
 
             var argumentExtractor = new MapperArgumentExtractor(mapAttr, data.DiagnosticReport);
@@ -55,8 +55,12 @@ namespace EzMap.Generators.Pipelines.Mappers
 
             data.MapperInfo = new MapperInfo
             {
-                ClassSymbol = symbol, DomainTypeSymbol = domainType, DtoTypeSymbol = dtoType,
+                AttributeData = mapAttr,
+                ClassSymbol = symbol,
+                DomainTypeSymbol = domainType,
+                DtoTypeSymbol = dtoType
             };
+            
             argumentExtractor.ExtractNamedArguments(data.MapperInfo, ct);
 
             data.MapperInfo.PropertyInfos = PropertyInfoMapper.GetPropertyInfos(
