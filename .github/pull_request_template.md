@@ -1,4 +1,3 @@
-## Feature Pull Request
 ### Description:
 Write a helpful description of what this pull request proposes to change.
 A bulleted list can be very helpful if multiple changes are made.
@@ -7,13 +6,17 @@ A bulleted list can be very helpful if multiple changes are made.
 -
 
 ### Pull Request Checklist:
-* [ ] Have you targeted the correct branch (`dev`)?
+* [ ] Have you targeted the correct branch?
+  * Feature PRs should target `dev`.
+  * Chore and bugfix PRs should target `dev` unless critical, in such cases they should probably target `main` or a release branch
+  * Hotfix PRs should target `main` or a release branch
 * [ ] Have you followed the coding standard to the best of your ability?
 * [ ] Have you created tests covering your changes?
 * [ ] Have you successfully ran tests with your changes locally?
 * [ ] Have you added necessary documentation for your changes?
 * [ ] If you have ToDo's in your code, have you created an issue about this ToDo?
 * [ ] If you have ToDo's in your code, have you put the name of the ToDo issue in the ToDo comment?
+* [ ] Have you set appropriate labels?
 
 
 ### Testing instructions
