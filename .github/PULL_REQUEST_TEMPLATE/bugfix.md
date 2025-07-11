@@ -22,8 +22,8 @@ Write any specific instructions for testing this bugfix.
 
 ### Link to issue(s):
 
-- Closes issue: #
-- Related issue: #
+- Fixes: #
+- Related: #
 
 ### Review Process:
 Please think about these questions when reviewing the PR:

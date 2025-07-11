@@ -1,6 +1,6 @@
 ## Feature Pull Request
 ### Description:
-Write a helpful description of what this pull request proses to change.
+Write a helpful description of what this pull request proposes to change.
 A bulleted list can be very helpful if multiple changes are made.
 
 -
@@ -21,15 +21,15 @@ Write any special instructions for testing this pull request.
 
 ### Link to issue(s):
 
-- Closes issue: #
-- Related issue: #
+- Closes: #
+- Related: #
 
 ### Review Process:
-Please think about theses questions when reviewing the PR
-- Does this PR do what it claims to do?
-- Does this PR do what it is claiming to do correctly?
+Please think about these questions when reviewing the PR
+- Does this PR fulfill its intended purpose correctly?
 - Is the code readable?
 - Can the code be shorter?
 - Can the code be more simple?
 - Are changes covered by tests?
 - Are changes covered by (good) enough tests?
+

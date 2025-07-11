@@ -21,8 +21,8 @@ Write any special instructions for testing this pull request.
 
 ### Link to issue(s):
 
-- Closes issue: #
-- Related issue: #
+- Closes: #
+- Related: #
 
 ### Review Process:
 Please think about these questions when reviewing the PR

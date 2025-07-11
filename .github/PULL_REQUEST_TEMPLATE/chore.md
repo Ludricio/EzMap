@@ -21,8 +21,8 @@ Provide any relevant instructions for validating this change, if needed.
 
 ### Link to issue(s):
 
-- Closes issue: #
-- Related issue: #
+- Closes: #
+- Related: #
 
 ### Review Process:
 Please think about these questions when reviewing the PR:

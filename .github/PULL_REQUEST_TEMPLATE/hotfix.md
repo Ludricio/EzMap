@@ -21,8 +21,8 @@ Describe how to test and validate the fix.
 
 ### Link to issue(s):
 
-- Closes issue: #
-- Related incident/ticket: #
+- Closes: #
+- Related: #
 
 ### Review Process:
 Please think about these questions when reviewing the PR:
