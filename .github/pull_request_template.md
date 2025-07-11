@@ -1,6 +1,7 @@
 ### Description:
 Write a helpful description of what this pull request proposes to change.
 A bulleted list can be very helpful if multiple changes are made.
+If possible, include screenshots of changes/fixes.
 
 -
 -
