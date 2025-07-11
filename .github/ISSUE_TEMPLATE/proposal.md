@@ -1,7 +1,7 @@
 ---
 name: Proposal
-about: Describe this issue template's purpose here.
-title: ''
+about: For early-stage ideas, concepts, or discussions that might become features later. 
+title: '[PROPOSAL]'
 labels: proposal
 assignees: ''
 
