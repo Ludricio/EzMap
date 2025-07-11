@@ -2,11 +2,14 @@
 using Microsoft.CodeAnalysis.Text;
 using System.Collections.Immutable;
 using System.Text;
+using EzMap.Generators.Diagnostics;
 using EzMap.Generators.Pipelines.DefaultSettings.Models;
 using EzMap.Generators.Pipelines.Mappers.Converters;
 using EzMap.Generators.Pipelines.Mappers.Models;
 using EzMap.Generators.Pipelines.Mappers.Models.MappingInfos;
+using EzMap.Generators.Pipelines.Mappers.Models.Mappings;
 using EzMap.Generators.Pipelines.Mappers.PropertyMappers;
+using EzMap.Generators.Utils.Extensions;
 
 namespace EzMap.Generators.Pipelines.Mappers
 {
@@ -33,8 +36,29 @@ namespace EzMap.Generators.Pipelines.Mappers
 
             foreach (var mapperInfo in mapperInfos)
             {
+                mapperCache.TryAdd((mapperInfo.DomainTypeSymbol, mapperInfo.DtoTypeSymbol), mapperInfo);
+                
                 var finalizer = new PropertyMappingFinalizer(compilation, mapperInfo.AutoMapConvention);
                 var mappings = finalizer.MapPropertiesFromPropertyInfos(mapperInfo.PropertyInfos);
+
+                foreach (var mapping in mappings.OfType<UnmappedDomainProperty>()
+                             .Where(p => p.Symbol.IsRequired))
+                {
+                    spc.ReportDiagnostic(EzMapDiagnostic.RequiredPropertyNotMapped,
+                        mapperInfo.AttributeData.ApplicationSyntaxReference!.GetSyntax().GetLocation(),
+                        mapping.Symbol.ToDisplayString(),
+                        mapperInfo.DomainTypeSymbol.ToDisplayString()
+                    );
+                }
+                foreach (var mapping in mappings.OfType<UnmappedDtoProperty>()
+                             .Where(p => p.Symbol.IsRequired))
+                {
+                    spc.ReportDiagnostic(EzMapDiagnostic.RequiredPropertyNotMapped,
+                        mapperInfo.AttributeData.ApplicationSyntaxReference!.GetSyntax().GetLocation(),
+                        mapping.Symbol.ToDisplayString(),
+                        mapperInfo.DtoTypeSymbol.ToDisplayString()
+                    );
+                }
 
                 var converterInstances = ConverterInstanceDictionaryBuilder.BuildConverterInstanceDictionary(mappings);
 
