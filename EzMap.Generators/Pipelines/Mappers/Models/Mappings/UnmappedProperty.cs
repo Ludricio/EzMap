@@ -2,7 +2,7 @@
 
 namespace EzMap.Generators.Pipelines.Mappers.Models.Mappings
 {
-    internal record UnmappedDomainProperty(
+    internal abstract record UnmappedProperty(
         IPropertySymbol Symbol
-    ) : UnmappedProperty(Symbol);
+    ) : PropertyMapping;
 }
