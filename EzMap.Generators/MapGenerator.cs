@@ -61,7 +61,7 @@ public class MapGenerator : IIncrementalGenerator
     /// <summary>
     /// Semantic transform to extract configuration from the attribute.
     /// </summary>
-    private static MapperConfiguration? SemanticTransform(
+    private static MapperGenerationModel? SemanticTransform(
         GeneratorAttributeSyntaxContext context,
         CancellationToken cancellationToken)
     {
@@ -89,6 +89,10 @@ public class MapGenerator : IIncrementalGenerator
 
         var sourceType = attributeClass.TypeArguments[0];
         var targetType = attributeClass.TypeArguments[1];
+
+        // Check for errors in type arguments (like unresolved types)
+        if (sourceType.TypeKind == TypeKind.Error || targetType.TypeKind == TypeKind.Error)
+            return null;
 
         // Extract configuration properties
         bool generateInstanceExtensions = true;
@@ -125,7 +129,7 @@ public class MapGenerator : IIncrementalGenerator
             ? "" 
             : (classSymbol.ContainingNamespace?.ToDisplayString() ?? "");
 
-        return new MapperConfiguration(
+        var configuration = new MapperConfiguration(
             className,
             classNamespace,
             sourceTypeModel,
@@ -133,6 +137,8 @@ public class MapGenerator : IIncrementalGenerator
             generateInstanceExtensions,
             generateStaticExtensions,
             attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? Location.None);
+
+        return new MapperGenerationModel(configuration, sourceType, targetType, classSymbol);
     }
 
     /// <summary>
@@ -140,58 +146,29 @@ public class MapGenerator : IIncrementalGenerator
     /// </summary>
     private static void GenerateSource(
         SourceProductionContext context,
-        (Compilation compilation, ImmutableArray<MapperConfiguration?> configurations) input)
+        (Compilation compilation, ImmutableArray<MapperGenerationModel?> models) input)
     {
-        var (compilation, configurations) = input;
+        var (compilation, models) = input;
 
-        foreach (var config in configurations)
+        foreach (var model in models)
         {
-            if (config == null)
+            if (model == null)
                 continue;
 
-            GenerateMapperClass(context, compilation, config.Value);
+            GenerateMapperClass(context, compilation, model);
         }
     }
 
     private static void GenerateMapperClass(
         SourceProductionContext context,
         Compilation compilation,
-        MapperConfiguration config)
+        MapperGenerationModel model)
     {
         var diagnostics = new List<Diagnostic>();
-
-        // Get type symbols for validation and property matching
-        // We need to convert the fully qualified name to metadata name format
-        var sourceTypeName = config.SourceType.FullyQualifiedName
-            .Replace("global::", "")
-            .Replace("<", "`1[")
-            .Replace(">", "]")
-            .Replace(", ", ",");
-        var targetTypeName = config.TargetType.FullyQualifiedName
-            .Replace("global::", "")
-            .Replace("<", "`1[")
-            .Replace(">", "]")
-            .Replace(", ", ",");
-
-        // Try to find the types in the compilation
-        var sourceType = FindTypeSymbol(compilation, config.SourceType.SimpleName);
-        var targetType = FindTypeSymbol(compilation, config.TargetType.SimpleName);
-
-        if (sourceType == null || targetType == null)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(
-                DiagnosticDescriptors.InvalidGenericTypeArgument,
-                config.AttributeLocation,
-                sourceType == null ? config.SourceType.SimpleName : config.TargetType.SimpleName));
-            return;
-        }
+        var config = model.Configuration;
 
         // Validate constructors
-        var classSymbol = FindTypeSymbol(compilation, config.ClassName, config.ClassNamespace);
-        if (classSymbol == null)
-            return;
-
-        if (!SymbolHelpers.HasAccessibleParameterlessConstructor(sourceType, classSymbol))
+        if (!SymbolHelpers.HasAccessibleParameterlessConstructor(model.SourceTypeSymbol, model.ClassSymbol))
         {
             diagnostics.Add(Diagnostic.Create(
                 DiagnosticDescriptors.TypesMustHaveAccessibleConstructors,
@@ -199,7 +176,7 @@ public class MapGenerator : IIncrementalGenerator
                 config.SourceType.SimpleName));
         }
 
-        if (!SymbolHelpers.HasAccessibleParameterlessConstructor(targetType, classSymbol))
+        if (!SymbolHelpers.HasAccessibleParameterlessConstructor(model.TargetTypeSymbol, model.ClassSymbol))
         {
             diagnostics.Add(Diagnostic.Create(
                 DiagnosticDescriptors.TypesMustHaveAccessibleConstructors,
@@ -209,11 +186,11 @@ public class MapGenerator : IIncrementalGenerator
 
         // Match properties
         var (sourceToTargetMappings, sourceToTargetDiagnostics) = 
-            PropertyMatcher.MatchProperties(sourceType, targetType, compilation, config.AttributeLocation);
+            PropertyMatcher.MatchProperties(model.SourceTypeSymbol, model.TargetTypeSymbol, compilation, config.AttributeLocation);
         diagnostics.AddRange(sourceToTargetDiagnostics);
 
         var (targetToSourceMappings, targetToSourceDiagnostics) = 
-            PropertyMatcher.MatchProperties(targetType, sourceType, compilation, config.AttributeLocation);
+            PropertyMatcher.MatchProperties(model.TargetTypeSymbol, model.SourceTypeSymbol, compilation, config.AttributeLocation);
         diagnostics.AddRange(targetToSourceDiagnostics);
 
         // Report diagnostics
@@ -234,66 +211,6 @@ public class MapGenerator : IIncrementalGenerator
         // Add source to compilation
         var fileName = $"{config.ClassName}_{config.SourceType.SimpleName}_{config.TargetType.SimpleName}.g.cs";
         context.AddSource(fileName, sourceCode);
-    }
-
-    /// <summary>
-    /// Helper to find a type symbol by name.
-    /// </summary>
-    private static INamedTypeSymbol? FindTypeSymbol(Compilation compilation, string typeName, string? namespaceName = null)
-    {
-        // Search through all types in the compilation
-        var visitor = new TypeSymbolVisitor(typeName, namespaceName);
-        visitor.Visit(compilation.Assembly.GlobalNamespace);
-        return visitor.FoundType;
-    }
-
-    private class TypeSymbolVisitor : SymbolVisitor
-    {
-        private readonly string _typeName;
-        private readonly string? _namespaceName;
-        public INamedTypeSymbol? FoundType { get; private set; }
-
-        public TypeSymbolVisitor(string typeName, string? namespaceName = null)
-        {
-            _typeName = typeName;
-            _namespaceName = namespaceName;
-        }
-
-        public override void VisitNamespace(INamespaceSymbol symbol)
-        {
-            if (FoundType != null)
-                return;
-
-            foreach (var member in symbol.GetMembers())
-            {
-                member.Accept(this);
-                if (FoundType != null)
-                    return;
-            }
-        }
-
-        public override void VisitNamedType(INamedTypeSymbol symbol)
-        {
-            if (FoundType != null)
-                return;
-
-            if (symbol.Name == _typeName)
-            {
-                if (_namespaceName == null || symbol.ContainingNamespace?.ToDisplayString() == _namespaceName)
-                {
-                    FoundType = symbol;
-                    return;
-                }
-            }
-
-            // Check nested types
-            foreach (var member in symbol.GetTypeMembers())
-            {
-                member.Accept(this);
-                if (FoundType != null)
-                    return;
-            }
-        }
     }
 
     private static string GenerateSourceCode(GenerationContext context, Compilation compilation)
