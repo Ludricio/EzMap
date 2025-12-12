@@ -14,7 +14,8 @@ internal readonly struct PropertyMapping : IEquatable<PropertyMapping>
         string targetPropertyType,
         PropertyMappingStrategy strategy,
         bool requiresNullHandling,
-        bool usedNormalization)
+        bool usedNormalization,
+        string? mapperMethodName = null)
     {
         SourcePropertyName = sourcePropertyName;
         TargetPropertyName = targetPropertyName;
@@ -23,6 +24,7 @@ internal readonly struct PropertyMapping : IEquatable<PropertyMapping>
         Strategy = strategy;
         RequiresNullHandling = requiresNullHandling;
         UsedNormalization = usedNormalization;
+        MapperMethodName = mapperMethodName;
     }
 
     /// <summary>
@@ -60,6 +62,11 @@ internal readonly struct PropertyMapping : IEquatable<PropertyMapping>
     /// </summary>
     public bool UsedNormalization { get; }
 
+    /// <summary>
+    /// The name of the mapper method to call for recursive mapping (if applicable).
+    /// </summary>
+    public string? MapperMethodName { get; }
+
     public bool Equals(PropertyMapping other)
     {
         return SourcePropertyName == other.SourcePropertyName &&
@@ -68,7 +75,8 @@ internal readonly struct PropertyMapping : IEquatable<PropertyMapping>
                TargetPropertyType == other.TargetPropertyType &&
                Strategy == other.Strategy &&
                RequiresNullHandling == other.RequiresNullHandling &&
-               UsedNormalization == other.UsedNormalization;
+               UsedNormalization == other.UsedNormalization &&
+               MapperMethodName == other.MapperMethodName;
     }
 
     public override bool Equals(object? obj)
@@ -88,6 +96,7 @@ internal readonly struct PropertyMapping : IEquatable<PropertyMapping>
             hash = hash * 31 + Strategy.GetHashCode();
             hash = hash * 31 + RequiresNullHandling.GetHashCode();
             hash = hash * 31 + UsedNormalization.GetHashCode();
+            hash = hash * 31 + (MapperMethodName?.GetHashCode() ?? 0);
             return hash;
         }
     }

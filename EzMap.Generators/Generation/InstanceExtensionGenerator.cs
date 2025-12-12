@@ -142,8 +142,23 @@ internal static class InstanceExtensionGenerator
                 break;
 
             case PropertyMappingStrategy.RecursiveMapping:
-                // For now, just use default - would need more context
-                valueExpression = $"default({mapping.TargetPropertyType})";
+                // Call the mapper method
+                if (!string.IsNullOrEmpty(mapping.MapperMethodName))
+                {
+                    if (mapping.RequiresNullHandling)
+                    {
+                        valueExpression = $"{sourceAccess}?.{mapping.MapperMethodName}() ?? default({mapping.TargetPropertyType})";
+                    }
+                    else
+                    {
+                        valueExpression = $"{sourceAccess}.{mapping.MapperMethodName}()";
+                    }
+                }
+                else
+                {
+                    // Fallback if method name not provided
+                    valueExpression = $"default({mapping.TargetPropertyType})";
+                }
                 break;
 
             case PropertyMappingStrategy.UseDefault:

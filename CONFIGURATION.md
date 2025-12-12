@@ -252,7 +252,6 @@ public static partial class RequestMappers
 ```csharp
 [Map<Order, OrderDto>]
 [MapProperty("OrderId", "Id")]
-[MapProperty("CustomerInfo.Name", "CustomerName")] // Nested property
 [MapOptions(
     NullableFallbackBehavior = NullableFallbackBehavior.Diagnostic,
     AllowRecursiveMapping = true

@@ -222,23 +222,29 @@ public class MapGenerator : IIncrementalGenerator
             model.Configuration.AttributeLocation);
 
         // Validate constructors (consider constructor selection strategy)
-        if (resolvedOptions.ConstructorSelectionStrategy == ConstructorSelectionStrategy.Parameterless)
-        {
-            if (!SymbolHelpers.HasAccessibleParameterlessConstructor(model.SourceTypeSymbol, model.ClassSymbol))
-            {
-                diagnostics.Add(Diagnostic.Create(
-                    DiagnosticDescriptors.TypesMustHaveAccessibleConstructors,
-                    config.AttributeLocation,
-                    config.SourceType.SimpleName));
-            }
+        var sourceConstructor = SymbolHelpers.GetBestConstructor(
+            model.SourceTypeSymbol, 
+            resolvedOptions.ConstructorSelectionStrategy,
+            model.ClassSymbol);
+        var targetConstructor = SymbolHelpers.GetBestConstructor(
+            model.TargetTypeSymbol,
+            resolvedOptions.ConstructorSelectionStrategy,
+            model.ClassSymbol);
 
-            if (!SymbolHelpers.HasAccessibleParameterlessConstructor(model.TargetTypeSymbol, model.ClassSymbol))
-            {
-                diagnostics.Add(Diagnostic.Create(
-                    DiagnosticDescriptors.TypesMustHaveAccessibleConstructors,
-                    config.AttributeLocation,
-                    config.TargetType.SimpleName));
-            }
+        if (sourceConstructor == null)
+        {
+            diagnostics.Add(Diagnostic.Create(
+                DiagnosticDescriptors.TypesMustHaveAccessibleConstructors,
+                config.AttributeLocation,
+                config.SourceType.SimpleName));
+        }
+
+        if (targetConstructor == null)
+        {
+            diagnostics.Add(Diagnostic.Create(
+                DiagnosticDescriptors.TypesMustHaveAccessibleConstructors,
+                config.AttributeLocation,
+                config.TargetType.SimpleName));
         }
 
         // Match properties with configuration

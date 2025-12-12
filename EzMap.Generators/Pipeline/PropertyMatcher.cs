@@ -62,7 +62,7 @@ internal static class PropertyMatcher
                 continue;
             }
 
-            var strategy = DetermineStrategy(sourceProp, targetProp, compilation, options);
+            var (strategy, mapperMethodName) = DetermineStrategy(sourceProp, targetProp, compilation, options);
             var requiresNullHandling = NullabilityHelper.RequiresNullHandling(sourceProp.Type, targetProp.Type);
 
             // Emit info diagnostic if normalization was used
@@ -95,6 +95,17 @@ internal static class PropertyMatcher
                     SymbolHelpers.GetMinimalName(targetProp.Type)));
             }
 
+            // Emit info if using recursive mapping
+            if (strategy == PropertyMappingStrategy.RecursiveMapping)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    DiagnosticDescriptors.RecursiveMappingDetected,
+                    reportLocation,
+                    sourceProp.Name,
+                    SymbolHelpers.GetMinimalName(sourceProp.Type),
+                    SymbolHelpers.GetMinimalName(targetProp.Type)));
+            }
+
             mappings.Add(new PropertyMapping(
                 sourceProp.Name,
                 targetProp.Name,
@@ -102,7 +113,8 @@ internal static class PropertyMatcher
                 SymbolHelpers.GetFullyQualifiedName(targetProp.Type),
                 strategy,
                 requiresNullHandling,
-                usedNormalization));
+                usedNormalization,
+                mapperMethodName));
         }
 
         return (mappings.ToImmutableArray(), diagnostics);
@@ -148,7 +160,7 @@ internal static class PropertyMatcher
         return (null, false);
     }
 
-    private static PropertyMappingStrategy DetermineStrategy(
+    private static (PropertyMappingStrategy strategy, string? mapperMethodName) DetermineStrategy(
         IPropertySymbol sourceProperty,
         IPropertySymbol targetProperty,
         Compilation compilation,
@@ -163,26 +175,38 @@ internal static class PropertyMatcher
 
         // Direct assignment if same underlying type
         if (SymbolEqualityComparer.Default.Equals(sourceUnderlying, targetUnderlying))
-            return PropertyMappingStrategy.DirectAssignment;
+            return (PropertyMappingStrategy.DirectAssignment, null);
 
         // Check for conversions if we have a C# compilation
         if (compilation is CSharpCompilation csharpCompilation)
         {
             var conversion = csharpCompilation.ClassifyConversion(sourceType, targetType);
             if (conversion.IsImplicit)
-                return PropertyMappingStrategy.ImplicitCast;
+                return (PropertyMappingStrategy.ImplicitCast, null);
 
             if (conversion.IsExplicit)
-                return PropertyMappingStrategy.ExplicitCast;
+                return (PropertyMappingStrategy.ExplicitCast, null);
         }
 
         // Check for recursive mapping if enabled
         if (options.AllowRecursiveMapping)
         {
-            // TODO: Implement recursive mapping detection
-            // For now, just use default
+            // Check if both types are reference types (classes) that could have mappers
+            // and they are DIFFERENT types
+            if (!SymbolEqualityComparer.Default.Equals(sourceUnderlying, targetUnderlying) &&
+                sourceUnderlying.TypeKind == TypeKind.Class && 
+                targetUnderlying.TypeKind == TypeKind.Class &&
+                sourceUnderlying.SpecialType == SpecialType.None &&
+                targetUnderlying.SpecialType == SpecialType.None)
+            {
+                // Generate mapper method name based on target type
+                var targetTypeName = SymbolHelpers.GetSimpleName(targetUnderlying);
+                var mapperMethodName = $"MapTo{targetTypeName}";
+                
+                return (PropertyMappingStrategy.RecursiveMapping, mapperMethodName);
+            }
         }
 
-        return PropertyMappingStrategy.UseDefault;
+        return (PropertyMappingStrategy.UseDefault, null);
     }
 }
