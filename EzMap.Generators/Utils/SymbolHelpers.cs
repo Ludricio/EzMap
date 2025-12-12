@@ -83,11 +83,18 @@ internal static class SymbolHelpers
         foreach (var member in typeSymbol.GetMembers())
         {
             if (member is IPropertySymbol property && 
-                !property.IsStatic && 
-                (property.SetMethod != null || property.IsInitOnly()) &&
-                (property.SetMethod?.DeclaredAccessibility == Accessibility.Public || property.IsInitOnly()))
+                !property.IsStatic)
             {
-                yield return property;
+                // Check if property has a public setter
+                if (property.SetMethod != null && property.SetMethod.DeclaredAccessibility == Accessibility.Public)
+                {
+                    yield return property;
+                }
+                // Or if it's init-only with public accessibility
+                else if (property.SetMethod?.IsInitOnly == true && property.DeclaredAccessibility == Accessibility.Public)
+                {
+                    yield return property;
+                }
             }
         }
     }

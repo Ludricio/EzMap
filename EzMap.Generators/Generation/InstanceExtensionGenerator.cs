@@ -93,7 +93,7 @@ internal static class InstanceExtensionGenerator
             case PropertyMappingStrategy.ExplicitCast:
                 if (mapping.RequiresNullHandling)
                 {
-                    valueExpression = $"({mapping.TargetPropertyType})({sourceAccess} ?? default)";
+                    valueExpression = $"({mapping.TargetPropertyType})({sourceAccess} ?? default({mapping.SourcePropertyType}))";
                 }
                 else
                 {

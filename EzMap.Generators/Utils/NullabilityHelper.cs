@@ -72,6 +72,7 @@ internal static class NullabilityHelper
     /// </summary>
     public static string GetDefaultValueExpression(ITypeSymbol typeSymbol)
     {
+        // For value types, return their appropriate default
         if (typeSymbol.IsValueType)
         {
             if (typeSymbol.SpecialType == SpecialType.System_Boolean)
@@ -82,7 +83,8 @@ internal static class NullabilityHelper
             return $"default({SymbolHelpers.GetFullyQualifiedName(typeSymbol)})";
         }
 
-        return "null!"; // For reference types, use null with null-forgiving operator
+        // For reference types, return default (which is null)
+        return $"default({SymbolHelpers.GetFullyQualifiedName(typeSymbol)})";
     }
 
     private static bool IsNumericType(ITypeSymbol typeSymbol)
