@@ -5,24 +5,24 @@ using MyNamespace;
 
 Console.WriteLine("Hello, World!");
 
-new Foo().ToDto();
+var foo = new Foo { Bar = "test", Baz = 42 };
+var dto = foo.MapToFooDto();
+Console.WriteLine($"Dto: _barModel={dto._barModel}, _bazEntity={dto._bazEntity}");
 
 namespace MyNamespace
 {
     public class Foo
     {
-        public string Bar { get; set; }
+        public string Bar { get; set; } = "";
         public int Baz { get; set; }
     }
 }
 
 public record FooDto
 {
-    public Guid _barModel { get; set; }
-    public required long _bazEntity { get; init; }
+    public string _barModel { get; set; } = "";
+    public long _bazEntity { get; init; }
 }
 
-[
-    MapClass<Foo, FooDto>
-]
+[Map<Foo, FooDto>]
 public static partial class Test;
