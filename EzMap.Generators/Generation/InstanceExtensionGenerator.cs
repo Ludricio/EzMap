@@ -18,23 +18,32 @@ internal static class InstanceExtensionGenerator
         ImmutableArray<PropertyMapping> sourceToTargetMappings,
         ImmutableArray<PropertyMapping> targetToSourceMappings)
     {
-        // Generate Source -> Target mapping method
-        GenerateMappingMethod(
-            builder,
-            config.SourceType,
-            config.TargetType,
-            sourceToTargetMappings,
-            GetMethodName(config.SourceType, config.TargetType));
+        // Generate Source -> Target mapping method (if mappings exist)
+        if (!sourceToTargetMappings.IsDefaultOrEmpty)
+        {
+            GenerateMappingMethod(
+                builder,
+                config.SourceType,
+                config.TargetType,
+                sourceToTargetMappings,
+                GetMethodName(config.SourceType, config.TargetType),
+                config.Options);
 
-        builder.AppendLine();
+            if (!targetToSourceMappings.IsDefaultOrEmpty)
+                builder.AppendLine();
+        }
 
-        // Generate Target -> Source mapping method
-        GenerateMappingMethod(
-            builder,
-            config.TargetType,
-            config.SourceType,
-            targetToSourceMappings,
-            GetMethodName(config.TargetType, config.SourceType));
+        // Generate Target -> Source mapping method (if mappings exist)
+        if (!targetToSourceMappings.IsDefaultOrEmpty)
+        {
+            GenerateMappingMethod(
+                builder,
+                config.TargetType,
+                config.SourceType,
+                targetToSourceMappings,
+                GetMethodName(config.TargetType, config.SourceType),
+                config.Options);
+        }
     }
 
     private static void GenerateMappingMethod(
@@ -42,7 +51,8 @@ internal static class InstanceExtensionGenerator
         TypeToMap sourceType,
         TypeToMap targetType,
         ImmutableArray<PropertyMapping> mappings,
-        string methodName)
+        string methodName,
+        MappingOptions options)
     {
         builder.AppendLine("/// <summary>");
         builder.AppendLine($"/// Maps from {sourceType.SimpleName} to {targetType.SimpleName}.");
@@ -50,8 +60,15 @@ internal static class InstanceExtensionGenerator
         builder.AppendLine($"public static {targetType.FullyQualifiedName} {methodName}(this {sourceType.FullyQualifiedName} source)");
         builder.AppendOpenBrace();
 
+        // Generate BeforeMap hook if enabled
+        if (options.GenerateMappingHooks)
+        {
+            builder.AppendLine($"source = BeforeMap(source);");
+            builder.AppendLine();
+        }
+
         // Generate the mapping logic
-        builder.AppendLine($"return new {targetType.FullyQualifiedName}");
+        builder.AppendLine($"var target = new {targetType.FullyQualifiedName}");
         builder.AppendOpenBrace();
 
         for (int i = 0; i < mappings.Length; i++)
@@ -59,15 +76,38 @@ internal static class InstanceExtensionGenerator
             var mapping = mappings[i];
             var isLast = i == mappings.Length - 1;
             
-            GeneratePropertyMapping(builder, mapping, isLast);
+            GeneratePropertyMapping(builder, mapping, isLast, options);
         }
 
         builder.AppendCloseBrace();
         builder.AppendLine(";");
+        builder.AppendLine();
+
+        // Generate AfterMap hook if enabled
+        if (options.GenerateMappingHooks)
+        {
+            builder.AppendLine($"target = AfterMap(source, target);");
+            builder.AppendLine();
+        }
+
+        builder.AppendLine("return target;");
         builder.AppendCloseBrace();
+
+        // Generate hook method stubs if enabled
+        if (options.GenerateMappingHooks)
+        {
+            builder.AppendLine();
+            builder.AppendLine($"static partial {sourceType.FullyQualifiedName} BeforeMap({sourceType.FullyQualifiedName} source);");
+            builder.AppendLine();
+            builder.AppendLine($"static partial {targetType.FullyQualifiedName} AfterMap({sourceType.FullyQualifiedName} source, {targetType.FullyQualifiedName} target);");
+        }
     }
 
-    private static void GeneratePropertyMapping(CodeBuilder builder, PropertyMapping mapping, bool isLast)
+    private static void GeneratePropertyMapping(
+        CodeBuilder builder, 
+        PropertyMapping mapping, 
+        bool isLast, 
+        MappingOptions options)
     {
         var sourceAccess = $"source.{mapping.SourcePropertyName}";
         string valueExpression;
@@ -77,8 +117,7 @@ internal static class InstanceExtensionGenerator
             case PropertyMappingStrategy.DirectAssignment:
                 if (mapping.RequiresNullHandling)
                 {
-                    // Handle nullable to non-nullable - use default for the type
-                    valueExpression = $"{sourceAccess} ?? default({mapping.TargetPropertyType})";
+                    valueExpression = GenerateNullHandling(sourceAccess, mapping.TargetPropertyType, options);
                 }
                 else
                 {
@@ -93,7 +132,8 @@ internal static class InstanceExtensionGenerator
             case PropertyMappingStrategy.ExplicitCast:
                 if (mapping.RequiresNullHandling)
                 {
-                    valueExpression = $"({mapping.TargetPropertyType})({sourceAccess} ?? default({mapping.SourcePropertyType}))";
+                    var nullHandled = GenerateNullHandling(sourceAccess, mapping.SourcePropertyType, options);
+                    valueExpression = $"({mapping.TargetPropertyType})({nullHandled})";
                 }
                 else
                 {
@@ -117,6 +157,17 @@ internal static class InstanceExtensionGenerator
 
         var comma = isLast ? "" : ",";
         builder.AppendLine($"{mapping.TargetPropertyName} = {valueExpression}{comma}");
+    }
+
+    private static string GenerateNullHandling(string sourceAccess, string targetType, MappingOptions options)
+    {
+        return options.NullableFallbackBehavior switch
+        {
+            NullableFallbackBehavior.Default => $"{sourceAccess} ?? default({targetType})",
+            NullableFallbackBehavior.Throw => $"{sourceAccess} ?? throw new global::System.ArgumentNullException(nameof({sourceAccess}))",
+            NullableFallbackBehavior.Diagnostic => $"{sourceAccess} ?? default({targetType})", // Diagnostic already emitted
+            _ => $"{sourceAccess} ?? default({targetType})"
+        };
     }
 
     private static string GetMethodName(TypeToMap sourceType, TypeToMap targetType)

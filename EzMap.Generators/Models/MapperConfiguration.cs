@@ -15,6 +15,7 @@ internal readonly struct MapperConfiguration : IEquatable<MapperConfiguration>
         TypeToMap targetType,
         bool generateInstanceExtensions,
         bool generateStaticExtensions,
+        MappingOptions options,
         Location attributeLocation)
     {
         ClassName = className;
@@ -23,6 +24,7 @@ internal readonly struct MapperConfiguration : IEquatable<MapperConfiguration>
         TargetType = targetType;
         GenerateInstanceExtensions = generateInstanceExtensions;
         GenerateStaticExtensions = generateStaticExtensions;
+        Options = options;
         AttributeLocation = attributeLocation;
     }
 
@@ -57,6 +59,11 @@ internal readonly struct MapperConfiguration : IEquatable<MapperConfiguration>
     public bool GenerateStaticExtensions { get; }
 
     /// <summary>
+    /// The mapping options (combining global and per-mapping configuration).
+    /// </summary>
+    public MappingOptions Options { get; }
+
+    /// <summary>
     /// The location of the Map attribute for diagnostic reporting.
     /// </summary>
     public Location AttributeLocation { get; }
@@ -68,7 +75,8 @@ internal readonly struct MapperConfiguration : IEquatable<MapperConfiguration>
                SourceType.Equals(other.SourceType) &&
                TargetType.Equals(other.TargetType) &&
                GenerateInstanceExtensions == other.GenerateInstanceExtensions &&
-               GenerateStaticExtensions == other.GenerateStaticExtensions;
+               GenerateStaticExtensions == other.GenerateStaticExtensions &&
+               Options.Equals(other.Options);
     }
 
     public override bool Equals(object? obj)
@@ -87,6 +95,7 @@ internal readonly struct MapperConfiguration : IEquatable<MapperConfiguration>
             hash = hash * 31 + TargetType.GetHashCode();
             hash = hash * 31 + GenerateInstanceExtensions.GetHashCode();
             hash = hash * 31 + GenerateStaticExtensions.GetHashCode();
+            hash = hash * 31 + Options.GetHashCode();
             return hash;
         }
     }

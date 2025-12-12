@@ -113,6 +113,9 @@ public class MapGenerator : IIncrementalGenerator
             }
         }
 
+        // Note: Full configuration resolution happens later in GenerateSource
+        // when we have access to the Compilation for global config
+
         // Create type models
         var sourceTypeModel = new TypeToMap(
             SymbolHelpers.GetFullyQualifiedName(sourceType),
@@ -129,6 +132,21 @@ public class MapGenerator : IIncrementalGenerator
             ? "" 
             : (classSymbol.ContainingNamespace?.ToDisplayString() ?? "");
 
+        // Create a placeholder configuration without options for now
+        // Options will be resolved in GenerateSource
+        var placeholderOptions = new MappingOptions(
+            ImmutableArray<string>.Empty,
+            ImmutableArray<string>.Empty,
+            true,
+            true,
+            NullableFallbackBehavior.Default,
+            false,
+            5,
+            ConstructorSelectionStrategy.Parameterless,
+            MappingDirection.Both,
+            false,
+            ImmutableArray<ExplicitPropertyMapping>.Empty);
+
         var configuration = new MapperConfiguration(
             className,
             classNamespace,
@@ -136,6 +154,7 @@ public class MapGenerator : IIncrementalGenerator
             targetTypeModel,
             generateInstanceExtensions,
             generateStaticExtensions,
+            placeholderOptions,
             attribute.ApplicationSyntaxReference?.GetSyntax().GetLocation() ?? Location.None);
 
         return new MapperGenerationModel(configuration, sourceType, targetType, classSymbol);
@@ -150,48 +169,108 @@ public class MapGenerator : IIncrementalGenerator
     {
         var (compilation, models) = input;
 
+        // Get global configuration once
+        var globalConfig = ConfigurationResolver.GetGlobalConfiguration(compilation);
+
         foreach (var model in models)
         {
             if (model == null)
                 continue;
 
-            GenerateMapperClass(context, compilation, model);
+            GenerateMapperClass(context, compilation, model, globalConfig);
         }
     }
 
     private static void GenerateMapperClass(
         SourceProductionContext context,
         Compilation compilation,
-        MapperGenerationModel model)
+        MapperGenerationModel model,
+        MappingOptions globalConfig)
     {
         var diagnostics = new List<Diagnostic>();
-        var config = model.Configuration;
+        
+        // Get all attributes on the mapper class for resolving options
+        var classAttributes = model.ClassSymbol.GetAttributes();
+        
+        // Find the specific Map attribute for this mapping
+        var mapAttribute = classAttributes.FirstOrDefault(a => 
+            a.AttributeClass?.Name == "MapAttribute" &&
+            a.AttributeClass.TypeArguments.Length == 2 &&
+            SymbolEqualityComparer.Default.Equals(a.AttributeClass.TypeArguments[0], model.SourceTypeSymbol) &&
+            SymbolEqualityComparer.Default.Equals(a.AttributeClass.TypeArguments[1], model.TargetTypeSymbol));
 
-        // Validate constructors
-        if (!SymbolHelpers.HasAccessibleParameterlessConstructor(model.SourceTypeSymbol, model.ClassSymbol))
+        if (mapAttribute == null)
+            return;
+
+        // Resolve full configuration for this mapping
+        var resolvedOptions = ConfigurationResolver.ResolveConfiguration(
+            globalConfig,
+            mapAttribute,
+            classAttributes,
+            model.SourceTypeSymbol,
+            model.TargetTypeSymbol);
+
+        // Update configuration with resolved options
+        var config = new MapperConfiguration(
+            model.Configuration.ClassName,
+            model.Configuration.ClassNamespace,
+            model.Configuration.SourceType,
+            model.Configuration.TargetType,
+            model.Configuration.GenerateInstanceExtensions,
+            model.Configuration.GenerateStaticExtensions,
+            resolvedOptions,
+            model.Configuration.AttributeLocation);
+
+        // Validate constructors (consider constructor selection strategy)
+        if (resolvedOptions.ConstructorSelectionStrategy == ConstructorSelectionStrategy.Parameterless)
         {
-            diagnostics.Add(Diagnostic.Create(
-                DiagnosticDescriptors.TypesMustHaveAccessibleConstructors,
-                config.AttributeLocation,
-                config.SourceType.SimpleName));
+            if (!SymbolHelpers.HasAccessibleParameterlessConstructor(model.SourceTypeSymbol, model.ClassSymbol))
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    DiagnosticDescriptors.TypesMustHaveAccessibleConstructors,
+                    config.AttributeLocation,
+                    config.SourceType.SimpleName));
+            }
+
+            if (!SymbolHelpers.HasAccessibleParameterlessConstructor(model.TargetTypeSymbol, model.ClassSymbol))
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    DiagnosticDescriptors.TypesMustHaveAccessibleConstructors,
+                    config.AttributeLocation,
+                    config.TargetType.SimpleName));
+            }
         }
 
-        if (!SymbolHelpers.HasAccessibleParameterlessConstructor(model.TargetTypeSymbol, model.ClassSymbol))
+        // Match properties with configuration
+        ImmutableArray<PropertyMapping> sourceToTargetMappings = ImmutableArray<PropertyMapping>.Empty;
+        ImmutableArray<PropertyMapping> targetToSourceMappings = ImmutableArray<PropertyMapping>.Empty;
+
+        // Generate based on mapping direction
+        if (resolvedOptions.MappingDirection == MappingDirection.Both || 
+            resolvedOptions.MappingDirection == MappingDirection.SourceToTarget)
         {
-            diagnostics.Add(Diagnostic.Create(
-                DiagnosticDescriptors.TypesMustHaveAccessibleConstructors,
+            var (mappings, diags) = PropertyMatcher.MatchProperties(
+                model.SourceTypeSymbol, 
+                model.TargetTypeSymbol, 
+                compilation, 
                 config.AttributeLocation,
-                config.TargetType.SimpleName));
+                resolvedOptions);
+            sourceToTargetMappings = mappings;
+            diagnostics.AddRange(diags);
         }
 
-        // Match properties
-        var (sourceToTargetMappings, sourceToTargetDiagnostics) = 
-            PropertyMatcher.MatchProperties(model.SourceTypeSymbol, model.TargetTypeSymbol, compilation, config.AttributeLocation);
-        diagnostics.AddRange(sourceToTargetDiagnostics);
-
-        var (targetToSourceMappings, targetToSourceDiagnostics) = 
-            PropertyMatcher.MatchProperties(model.TargetTypeSymbol, model.SourceTypeSymbol, compilation, config.AttributeLocation);
-        diagnostics.AddRange(targetToSourceDiagnostics);
+        if (resolvedOptions.MappingDirection == MappingDirection.Both || 
+            resolvedOptions.MappingDirection == MappingDirection.TargetToSource)
+        {
+            var (mappings, diags) = PropertyMatcher.MatchProperties(
+                model.TargetTypeSymbol, 
+                model.SourceTypeSymbol, 
+                compilation, 
+                config.AttributeLocation,
+                resolvedOptions);
+            targetToSourceMappings = mappings;
+            diagnostics.AddRange(diags);
+        }
 
         // Report diagnostics
         foreach (var diagnostic in diagnostics)
