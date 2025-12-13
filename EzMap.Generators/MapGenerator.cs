@@ -203,12 +203,27 @@ public class MapGenerator : IIncrementalGenerator
             return;
 
         // Resolve full configuration for this mapping
-        var resolvedOptions = ConfigurationResolver.ResolveConfiguration(
+        var (resolvedOptions, configDiagnostics) = ConfigurationResolver.ResolveConfiguration(
             globalConfig,
             mapAttribute,
             classAttributes,
             model.SourceTypeSymbol,
-            model.TargetTypeSymbol);
+            model.TargetTypeSymbol,
+            model.Configuration.AttributeLocation);
+
+        // Add configuration diagnostics
+        diagnostics.AddRange(configDiagnostics);
+
+        // If there are errors in configuration, skip generation
+        if (configDiagnostics.Any(d => d.Severity == DiagnosticSeverity.Error))
+        {
+            // Report diagnostics and return without generating
+            foreach (var diagnostic in diagnostics)
+            {
+                context.ReportDiagnostic(diagnostic);
+            }
+            return;
+        }
 
         // Update configuration with resolved options
         var config = new MapperConfiguration(

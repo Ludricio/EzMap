@@ -75,43 +75,64 @@ internal static class SymbolHelpers
     }
 
     /// <summary>
-    /// Gets all instance properties that are readable from a type.
+    /// Gets all instance properties that are readable from a type, including inherited properties.
     /// </summary>
     public static IEnumerable<IPropertySymbol> GetReadableProperties(ITypeSymbol typeSymbol)
     {
-        foreach (var member in typeSymbol.GetMembers())
+        var currentType = typeSymbol;
+        var seen = new HashSet<string>();
+
+        while (currentType != null && currentType.SpecialType != SpecialType.System_Object)
         {
-            if (member is IPropertySymbol property && 
-                !property.IsStatic && 
-                property.GetMethod != null &&
-                property.GetMethod.DeclaredAccessibility == Accessibility.Public)
+            foreach (var member in currentType.GetMembers())
             {
-                yield return property;
+                if (member is IPropertySymbol property && 
+                    !property.IsStatic && 
+                    property.GetMethod != null &&
+                    property.GetMethod.DeclaredAccessibility == Accessibility.Public &&
+                    !seen.Contains(property.Name))
+                {
+                    seen.Add(property.Name);
+                    yield return property;
+                }
             }
+
+            currentType = currentType.BaseType;
         }
     }
 
     /// <summary>
-    /// Gets all instance properties that are writable to a type.
+    /// Gets all instance properties that are writable to a type, including inherited properties.
     /// </summary>
     public static IEnumerable<IPropertySymbol> GetWritableProperties(ITypeSymbol typeSymbol)
     {
-        foreach (var member in typeSymbol.GetMembers())
+        var currentType = typeSymbol;
+        var seen = new HashSet<string>();
+
+        while (currentType != null && currentType.SpecialType != SpecialType.System_Object)
         {
-            if (member is IPropertySymbol property && 
-                !property.IsStatic)
+            foreach (var member in currentType.GetMembers())
             {
-                // Check if property has a public setter
-                if (property.SetMethod != null && property.SetMethod.DeclaredAccessibility == Accessibility.Public)
+                if (member is IPropertySymbol property && 
+                    !property.IsStatic &&
+                    !seen.Contains(property.Name))
                 {
-                    yield return property;
-                }
-                // Or if it's init-only with public accessibility
-                else if (property.SetMethod?.IsInitOnly == true && property.DeclaredAccessibility == Accessibility.Public)
-                {
-                    yield return property;
+                    // Check if property has a public setter
+                    if (property.SetMethod != null && property.SetMethod.DeclaredAccessibility == Accessibility.Public)
+                    {
+                        seen.Add(property.Name);
+                        yield return property;
+                    }
+                    // Or if it's init-only with public accessibility
+                    else if (property.SetMethod?.IsInitOnly == true && property.DeclaredAccessibility == Accessibility.Public)
+                    {
+                        seen.Add(property.Name);
+                        yield return property;
+                    }
                 }
             }
+
+            currentType = currentType.BaseType;
         }
     }
 

@@ -101,4 +101,23 @@ internal static class DiagnosticDescriptors
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true,
         description: "An explicit cast will be used to convert the property value.");
+
+    // Explicit mapping validation errors
+    public static readonly DiagnosticDescriptor ExplicitMappingSourcePropertyNotFound = new(
+        id: "EZMAP301",
+        title: "Source property does not exist",
+        messageFormat: "Source property '{0}' does not exist on type '{1}'",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The source property specified in MapProperty attribute does not exist on the source type.");
+
+    public static readonly DiagnosticDescriptor ExplicitMappingTargetPropertyNotFound = new(
+        id: "EZMAP302",
+        title: "Target property does not exist",
+        messageFormat: "Target property '{0}' does not exist on type '{1}'",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The target property specified in MapProperty attribute does not exist on the target type.");
 }

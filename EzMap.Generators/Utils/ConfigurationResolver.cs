@@ -1,5 +1,7 @@
+using EzMap.Generators.Diagnostics;
 using EzMap.Generators.Models;
 using Microsoft.CodeAnalysis;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 
@@ -51,13 +53,15 @@ internal static class ConfigurationResolver
 
     /// <summary>
     /// Resolves configuration for a specific mapping by merging global config with attribute properties.
+    /// Also validates explicit property mappings.
     /// </summary>
-    public static MappingOptions ResolveConfiguration(
+    public static (MappingOptions options, List<Diagnostic> diagnostics) ResolveConfiguration(
         MappingOptions globalConfig,
         AttributeData mapAttribute,
         ImmutableArray<AttributeData> classAttributes,
         ITypeSymbol sourceType,
-        ITypeSymbol targetType)
+        ITypeSymbol targetType,
+        Location attributeLocation)
     {
         // Start with global config
         var customPrefixes = globalConfig.CustomPrefixes;
@@ -125,29 +129,72 @@ internal static class ConfigurationResolver
         }
 
         // Extract explicit property mappings
-        var explicitMappings = classAttributes
+        var diagnostics = new List<Diagnostic>();
+        var explicitMappingsBuilder = ImmutableArray.CreateBuilder<ExplicitPropertyMapping>();
+        
+        var mapPropertyAttributes = classAttributes
             .Where(a => a.AttributeClass?.Name == "MapPropertyAttribute")
             .Where(a => IsForThisMapping(a, sourceType, targetType))
-            .Select(a => 
-            {
-                // Try constructor arguments first (old style)
-                if (a.ConstructorArguments.Length >= 2)
-                {
-                    var sourceProp = a.ConstructorArguments[0].Value?.ToString() ?? "";
-                    var targetProp = a.ConstructorArguments[1].Value?.ToString() ?? "";
-                    return new ExplicitPropertyMapping(sourceProp, targetProp);
-                }
-                // Try named arguments
-                var srcArg = a.NamedArguments.FirstOrDefault(na => na.Key == "DomainPropName" || na.Key == "SourceProperty");
-                var tgtArg = a.NamedArguments.FirstOrDefault(na => na.Key == "DtoPropName" || na.Key == "TargetProperty");
-                return new ExplicitPropertyMapping(
-                    srcArg.Value.Value?.ToString() ?? "",
-                    tgtArg.Value.Value?.ToString() ?? "");
-            })
-            .Where(m => !string.IsNullOrEmpty(m.SourceProperty) && !string.IsNullOrEmpty(m.TargetProperty))
-            .ToImmutableArray();
+            .ToList();
 
-        return new MappingOptions(
+        // Get source and target properties for validation
+        var sourceProperties = SymbolHelpers.GetReadableProperties(sourceType).ToList();
+        var targetProperties = SymbolHelpers.GetWritableProperties(targetType).ToList();
+
+        foreach (var attr in mapPropertyAttributes)
+        {
+            string? sourceProp = null;
+            string? targetProp = null;
+
+            // Try constructor arguments first (old style)
+            if (attr.ConstructorArguments.Length >= 2)
+            {
+                sourceProp = attr.ConstructorArguments[0].Value?.ToString();
+                targetProp = attr.ConstructorArguments[1].Value?.ToString();
+            }
+            else
+            {
+                // Try named arguments
+                var srcArg = attr.NamedArguments.FirstOrDefault(na => na.Key == "DomainPropName" || na.Key == "SourceProperty");
+                var tgtArg = attr.NamedArguments.FirstOrDefault(na => na.Key == "DtoPropName" || na.Key == "TargetProperty");
+                sourceProp = srcArg.Value.Value?.ToString();
+                targetProp = tgtArg.Value.Value?.ToString();
+            }
+
+            if (string.IsNullOrEmpty(sourceProp) || string.IsNullOrEmpty(targetProp))
+                continue;
+
+            // Validate source property exists
+            var sourcePropertySymbol = sourceProperties.FirstOrDefault(p => p.Name == sourceProp);
+            if (sourcePropertySymbol == null)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    DiagnosticDescriptors.ExplicitMappingSourcePropertyNotFound,
+                    attributeLocation,
+                    sourceProp,
+                    sourceType.ToDisplayString()));
+                continue; // Skip this mapping if source property doesn't exist
+            }
+
+            // Validate target property exists
+            var targetPropertySymbol = targetProperties.FirstOrDefault(p => p.Name == targetProp);
+            if (targetPropertySymbol == null)
+            {
+                diagnostics.Add(Diagnostic.Create(
+                    DiagnosticDescriptors.ExplicitMappingTargetPropertyNotFound,
+                    attributeLocation,
+                    targetProp,
+                    targetType.ToDisplayString()));
+                continue; // Skip this mapping if target property doesn't exist
+            }
+
+            // Only add valid mappings
+            explicitMappingsBuilder.Add(new ExplicitPropertyMapping(sourceProp, targetProp));
+        }
+
+        var explicitMappings = explicitMappingsBuilder.ToImmutable();
+
+        var options = new MappingOptions(
             customPrefixes,
             customSuffixes,
             enablePrefixSuffix,
@@ -159,6 +206,8 @@ internal static class ConfigurationResolver
             mappingDirection,
             generateHooks,
             explicitMappings);
+
+        return (options, diagnostics);
     }
 
     private static MappingOptions GetDefaultConfiguration()
